@@ -1,5 +1,8 @@
-Django==4.2.23
-djangorestframework==3.14.0
-django-cors-headers==4.3.1
-requests==2.31.0
-python-dotenv==1.0.0 
+# Python依赖包列表
+# 后端Django项目所需的第三方库
+
+Django==4.2.23  # Django Web框架
+djangorestframework==3.14.0  # Django REST API框架
+django-cors-headers==4.3.1  # 跨域资源共享支持
+requests==2.31.0  # HTTP请求库
+python-dotenv==1.0.0  # 环境变量管理 

@@ -1,12 +1,16 @@
 import { ref, reactive } from 'vue'
 
-// 生成随机会话ID - 确保在int64范围内
+/**
+ * 生成随机会话ID
+ * 确保生成的ID在int64范围内，避免数值溢出
+ * @returns {string} 会话ID字符串
+ */
 function generateConversationId() {
   // int64最大值: 9223372036854775807 (19位)
-  // 使用更安全的算法，确保不超过int64范围
-  const maxInt64 = 9223372036854775807n // 使用BigInt避免精度问题
+  // 使用BigInt避免精度问题
+  const maxInt64 = 9223372036854775807n
   
-  // 生成一个在安全范围内的随机数
+  // 生成8位随机数和10位时间戳的组合
   const randomPart = Math.floor(Math.random() * 100000000) // 8位随机数
   const timePart = Date.now() % 10000000000 // 10位时间戳
   const combined = BigInt(randomPart) * BigInt(10000000000) + BigInt(timePart)
@@ -17,7 +21,10 @@ function generateConversationId() {
   return safeId.toString()
 }
 
-// 从sessionStorage获取或创建会话状态
+/**
+ * 从sessionStorage获取或创建会话状态
+ * @returns {Object} 会话状态对象
+ */
 function getSessionState() {
   const stored = sessionStorage.getItem('chatSession')
   if (stored) {
@@ -39,12 +46,18 @@ function getSessionState() {
   return newSession
 }
 
-// 保存会话状态到sessionStorage
+/**
+ * 保存会话状态到sessionStorage
+ * @param {Object} state - 会话状态对象
+ */
 function saveSessionState(state) {
   sessionStorage.setItem('chatSession', JSON.stringify(state))
 }
 
-// 重置会话状态
+/**
+ * 重置会话状态
+ * @returns {Object} 新的会话状态对象
+ */
 function resetSession() {
   const newSession = {
     conversationId: generateConversationId(),
@@ -58,53 +71,112 @@ function resetSession() {
 // 创建响应式状态
 const sessionState = reactive(getSessionState())
 
-// 导出状态管理函数
+/**
+ * 会话状态管理函数
+ * 提供会话ID、消息列表的管理功能
+ */
 export function useSessionStore() {
-  // 获取当前会话ID
+  /**
+   * 获取当前会话ID
+   * @returns {string} 会话ID
+   */
   const getConversationId = () => sessionState.conversationId
   
-  // 获取消息列表
+  /**
+   * 获取消息列表
+   * @returns {Array} 消息数组
+   */
   const getMessages = () => sessionState.messages
   
-  // 添加消息
+  /**
+   * 添加消息到会话
+   * @param {Object} message - 消息对象
+   */
   const addMessage = (message) => {
-    // 检查是否已经存在相同的消息，避免重复
+    // 检查是否已经存在相同的消息，避免重复添加
     const exists = sessionState.messages.some(msg => 
       msg.role === message.role && msg.content === message.content
     )
     if (!exists) {
       sessionState.messages.push(message)
-      saveSessionState(sessionState)
+      // 优化：批量保存，减少存储操作频率
+      debounceSaveSession()
     }
   }
   
-  // 更新消息
+  /**
+   * 更新指定索引的消息
+   * @param {number} index - 消息索引
+   * @param {Object} message - 新的消息对象
+   */
   const updateMessage = (index, message) => {
     if (sessionState.messages[index]) {
-      // 只在内容真正改变时才更新
-      if (sessionState.messages[index].content !== message.content || 
-          sessionState.messages[index].isStreaming !== message.isStreaming) {
+      // 只在内容真正改变时才更新，避免不必要的存储操作
+      const currentMsg = sessionState.messages[index]
+      if (currentMsg.content !== message.content || 
+          currentMsg.isStreaming !== message.isStreaming) {
         sessionState.messages[index] = message
-        saveSessionState(sessionState)
+        
+        // 如果是流式状态变化，立即保存以确保UI响应
+        if (currentMsg.isStreaming !== message.isStreaming) {
+          saveSessionState(sessionState)
+        } else {
+          // 其他内容变化使用防抖保存
+          debounceSaveSession()
+        }
       }
     }
   }
   
-  // 重置会话
+  /**
+   * 立即更新消息的流式状态
+   * @param {number} index - 消息索引
+   * @param {boolean} isStreaming - 流式状态
+   */
+  const updateStreamingStatus = (index, isStreaming) => {
+    if (sessionState.messages[index]) {
+      sessionState.messages[index].isStreaming = isStreaming
+      // 立即保存，确保UI响应
+      saveSessionState(sessionState)
+    }
+  }
+  
+  /**
+   * 重置会话状态
+   */
   const resetSessionState = () => {
     const newState = resetSession()
     Object.assign(sessionState, newState)
   }
   
-  // 重置消息列表
+  /**
+   * 重置消息列表
+   * @param {Array} newMessages - 新的消息数组
+   */
   const resetMessages = (newMessages) => {
     sessionState.messages = newMessages
+    // 立即保存，因为这是重要的状态变更
     saveSessionState(sessionState)
   }
   
-  // 检查是否是页面刷新
+  /**
+   * 检查是否是页面刷新
+   * @returns {boolean} 是否是页面刷新
+   */
   const isPageRefresh = () => {
     return window.performance && window.performance.navigation.type === 1
+  }
+  
+  // 防抖保存函数，减少频繁的存储操作
+  let saveDebounceTimer = null
+  const debounceSaveSession = () => {
+    if (saveDebounceTimer) {
+      clearTimeout(saveDebounceTimer)
+    }
+    saveDebounceTimer = setTimeout(() => {
+      saveSessionState(sessionState)
+      saveDebounceTimer = null
+    }, 300) // 300ms防抖延迟
   }
   
   return {
@@ -114,6 +186,7 @@ export function useSessionStore() {
     getMessages,
     addMessage,
     updateMessage,
+    updateStreamingStatus,
     resetSessionState,
     resetMessages,
     isPageRefresh

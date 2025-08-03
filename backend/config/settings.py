@@ -14,52 +14,56 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# 构建项目路径
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# 加载环境变量
+# 加载环境变量文件
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
+# 快速开发设置 - 不适合生产环境
+# 参见 https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
+# 安全警告：在生产环境中保持密钥的秘密性！
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-z+co#&rm$ljd-x&)0olf9sha81&6g0wc^3w(%7%4r)lap(eg7u')
 
-# SECURITY WARNING: don't run with debug turned on in production!
+# 安全警告：在生产环境中不要开启调试模式！
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
+# 允许的主机列表
 ALLOWED_HOSTS = []
 
 
-# Application definition
+# 应用程序定义
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'rest_framework',
-    'corsheaders',
-    'api',
+    'django.contrib.admin',  # Django管理后台
+    'django.contrib.auth',   # 认证系统
+    'django.contrib.contenttypes',  # 内容类型框架
+    'django.contrib.sessions',  # 会话框架
+    'django.contrib.messages',  # 消息框架
+    'django.contrib.staticfiles',  # 静态文件管理
+    'rest_framework',  # Django REST框架
+    'corsheaders',  # 跨域资源共享
+    'api',  # 自定义API应用
 ]
 
+# 中间件配置
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # CORS中间件
+    'django.middleware.security.SecurityMiddleware',  # 安全中间件
+    'django.contrib.sessions.middleware.SessionMiddleware',  # 会话中间件
+    'django.middleware.common.CommonMiddleware',  # 通用中间件
+    'django.middleware.csrf.CsrfViewMiddleware',  # CSRF保护中间件
+    'django.contrib.auth.middleware.AuthenticationMiddleware',  # 认证中间件
+    'django.contrib.messages.middleware.MessageMiddleware',  # 消息中间件
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',  # 点击劫持保护中间件
 ]
 
+# URL配置根文件
 ROOT_URLCONF = 'config.urls'
 
+# 模板配置
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -76,22 +80,23 @@ TEMPLATES = [
     },
 ]
 
+# WSGI应用配置
 WSGI_APPLICATION = 'config.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
+# 数据库配置
+# 参见 https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.sqlite3',  # SQLite数据库引擎
+        'NAME': BASE_DIR / 'db.sqlite3',  # 数据库文件路径
     }
 }
 
 
-# Password validation
-# https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
+# 密码验证配置
+# 参见 https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -109,32 +114,34 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
-# https://docs.djangoproject.com/en/4.2/topics/i18n/
+# 国际化配置
+# 参见 https://docs.djangoproject.com/en/4.2/topics/i18n/
 
-LANGUAGE_CODE = 'zh-hans'
+LANGUAGE_CODE = 'zh-hans'  # 中文简体
 
-TIME_ZONE = 'Asia/Shanghai'
+TIME_ZONE = 'Asia/Shanghai'  # 上海时区
 
-USE_I18N = True
+USE_I18N = True  # 启用国际化
 
-USE_TZ = True
+USE_TZ = True  # 启用时区支持
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
+# 静态文件配置 (CSS, JavaScript, Images)
+# 参见 https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
 
-# Default primary key field type
-# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
+# 默认主键字段类型
+# 参见 https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# CORS配置 - 允许所有来源的跨域请求
 CORS_ALLOW_ALL_ORIGINS = True
 
 # AI API配置
-COZE_API_KEY = os.getenv('COZE_API_KEY', '')
-COZE_API_URL = os.getenv('COZE_API_URL', 'https://api.coze.cn/v3/chat')
-COZE_BOT_ID = os.getenv('COZE_BOT_ID', '')
-COZE_USER_ID = os.getenv('COZE_USER_ID', '123456789')
+# Coze API相关配置，从环境变量中读取
+COZE_API_KEY = os.getenv('COZE_API_KEY', '')  # Coze API密钥
+COZE_API_URL = os.getenv('COZE_API_URL', 'https://api.coze.cn/v3/chat')  # Coze API地址
+COZE_BOT_ID = os.getenv('COZE_BOT_ID', '')  # Coze机器人ID
+COZE_USER_ID = os.getenv('COZE_USER_ID', '123456789')  # Coze用户ID

@@ -18,7 +18,11 @@ from django.contrib import admin
 from django.urls import path
 from api.views import chat_stream, cancel_chat
 
+# URL路由配置
+# 定义API端点的URL映射
 urlpatterns = [
+    # 流式聊天API端点
     path('api/chat/stream/', chat_stream, name='chat-stream'),
+    # 取消对话API端点
     path('api/chat/cancel/', cancel_chat, name='chat-cancel'),
 ]

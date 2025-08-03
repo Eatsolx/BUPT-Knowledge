@@ -12,6 +12,7 @@ from rest_framework import status
 def chat_stream(request):
     """
     流式AI聊天API
+    接收前端消息，转发到Coze API，并返回流式响应
     """
     try:
         # 获取请求数据
@@ -31,30 +32,23 @@ def chat_stream(request):
         bot_id = getattr(settings, 'COZE_BOT_ID', '')
         user_id = getattr(settings, 'COZE_USER_ID', '123456789')
         
-        # 验证配置
-        print(f"API配置检查:")
-        print(f"  API URL: {api_url}")
-        print(f"  API Key: {'已设置' if api_key else '未设置'}")
-        print(f"  Bot ID: {bot_id}")
-        print(f"  User ID: {user_id}")
-        
+        # 验证配置完整性
         if not api_key or not bot_id:
             return Response(
                 {"error": "API配置不完整，请检查环境变量"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
         
-        # 从前端获取conversation_id，如果没有则生成一个新的
+        # 处理会话ID
         conversation_id = data.get('conversation_id')
         if not conversation_id:
-            # 生成一个随机的conversation_id
+            # 生成随机会话ID
             import random
             conversation_id = str(random.randint(1000000000000000000, 9999999999999999999))
         
         api_url_with_conversation = f"{api_url}?conversation_id={conversation_id}"
         
-        # 准备请求数据 - 根据Coze API文档格式
-        # 将前端传来的messages转换为additional_messages格式
+        # 准备请求数据 - 将前端消息转换为Coze API格式
         additional_messages = []
         for msg in messages:
             if msg.get('role') == 'user':
@@ -78,33 +72,29 @@ def chat_stream(request):
         }
         
         def generate_stream():
-            """生成流式响应"""
+            """生成流式响应数据"""
             try:
-                print(f"发送请求到: {api_url_with_conversation}")
-                print(f"请求数据: {json.dumps(payload, ensure_ascii=False)}")
+                # 优化：减少日志输出，只记录关键信息
                 
-
-                
+                # 发送请求到Coze API
                 response = requests.post(
                     api_url_with_conversation, 
                     json=payload, 
                     headers=headers, 
-                    stream=True
+                    stream=True,
+                    timeout=30  # 添加超时设置
                 )
                 
-                print(f"响应状态码: {response.status_code}")
                 if response.status_code != 200:
                     error_text = response.text if response.text else '未知错误'
-                    print(f"API错误: {error_text}")
                     yield f"data: {json.dumps({'error': f'AI服务请求失败: {error_text}'})}\n\n"
                     return
                 
-                print("开始处理流式响应...")
+                # 处理流式响应数据
                 buffer = ""
-                
                 for chunk in response.iter_content(chunk_size=1024):
                     if chunk:
-                        # 解码并处理数据，使用更安全的编码处理
+                        # 安全解码响应数据
                         try:
                             chunk_str = chunk.decode('utf-8')
                         except UnicodeDecodeError:
@@ -117,21 +107,16 @@ def chat_stream(request):
                         lines = buffer.split('\n')
                         buffer = lines.pop() if lines else ""
                         
+                        # 处理每一行数据
                         for line in lines:
                             line = line.strip()
                             if not line:
                                 continue
                                 
-                            print(f"处理行: {line[:100]}...")
-                            
                             if line.startswith('event:'):
                                 # 处理事件类型
                                 event_type = line.replace('event:', '').strip()
-                                print(f"收到事件: {event_type}")
-                                
-                                # 如果是结束事件，发送结束信号
                                 if event_type == 'done':
-                                    print("收到结束信号")
                                     yield "data: [DONE]\n\n"
                                     return
                                     
@@ -142,30 +127,27 @@ def chat_stream(request):
                                     try:
                                         # 解析JSON数据
                                         json_data = json.loads(data_content)
-                                        print(f"解析数据: {json_data}")
                                         
-                                        # 转发AI的回复内容和推理过程，过滤掉知识库内容
+                                        # 根据消息类型进行不同处理
                                         if json_data.get('type') == 'answer' and json_data.get('role') == 'assistant':
-                                            # 这是AI回复的内容，转发给前端
+                                            # AI回复内容，转发给前端
                                             yield f"data: {json.dumps(json_data, ensure_ascii=False)}\n\n"
                                         elif json_data.get('type') == 'knowledge':
-                                            # 这是知识库内容，不转发给前端，只记录日志
-                                            print(f"知识库内容: {json_data.get('content', '')[:100]}...")
+                                            # 知识库内容，只记录日志，不转发
+                                            pass  # 移除日志输出
                                         elif json_data.get('type') == 'verbose':
-                                            # 这是系统消息，不转发给前端
-                                            print(f"系统消息: {json_data.get('content', '')[:100]}...")
+                                            # 系统消息，只记录日志
+                                            pass  # 移除日志输出
                                         elif json_data.get('status') in ['created', 'in_progress', 'completed']:
-                                            # 这些是状态消息，不转发给前端
-                                            print(f"状态消息: {json_data.get('status')}")
-                                        # 移除else分支，避免重复转发
+                                            # 状态消息，只记录日志
+                                            pass  # 移除日志输出
                                             
                                     except json.JSONDecodeError as e:
-                                        print(f"JSON解析错误: {e}, 数据: {data_content}")
-                                        # 如果不是JSON，直接转发原始数据
+                                        # 静默处理JSON解析错误，避免日志噪音
+                                        # 非JSON数据直接转发
                                         yield f"data: {data_content}\n\n"
                                         
             except Exception as e:
-                print(f"流式处理错误: {str(e)}")
                 yield f"data: {json.dumps({'error': f'服务器错误: {str(e)}'})}\n\n"
         
         # 返回流式响应
@@ -178,7 +160,6 @@ def chat_stream(request):
         return response
         
     except Exception as e:
-        print(f"API错误: {str(e)}")
         return Response(
             {"error": f"服务器错误: {str(e)}"}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -189,6 +170,7 @@ def chat_stream(request):
 def cancel_chat(request):
     """
     取消对话API
+    向后端发送取消当前对话的请求
     """
     try:
         # 获取请求数据
@@ -228,7 +210,7 @@ def cancel_chat(request):
             'Authorization': f'Bearer {api_key}'
         }
         
-        # 发送取消请求
+        # 发送取消请求到Coze API
         response = requests.post(cancel_url, json=payload, headers=headers)
         
         if response.status_code == 200:
@@ -241,7 +223,6 @@ def cancel_chat(request):
             )
             
     except Exception as e:
-        print(f"取消对话错误: {str(e)}")
         return Response(
             {"error": f"服务器错误: {str(e)}"}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
