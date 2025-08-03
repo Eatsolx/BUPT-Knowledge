@@ -1,0 +1,50 @@
+
+
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend.Dockerfile
+    container_name: chat-ai-backend
+    environment:
+      - DEBUG=False
+      - COZE_API_KEY=${COZE_API_KEY}
+      - COZE_API_URL=${COZE_API_URL}
+      - COZE_BOT_ID=${COZE_BOT_ID}
+      - COZE_USER_ID=${COZE_USER_ID}
+      - SECRET_KEY=${SECRET_KEY}
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    networks:
+      - chat-ai-network
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend.Dockerfile
+    container_name: chat-ai-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - chat-ai-network
+
+  nginx:
+    build:
+      context: ..
+      dockerfile: docker/nginx.Dockerfile
+    container_name: chat-ai-nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - chat-ai-network
+
+networks:
+  chat-ai-network:
+    driver: bridge 

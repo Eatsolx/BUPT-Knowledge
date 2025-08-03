@@ -31,7 +31,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-z+co#&rm$ljd-x&)0olf9sha81
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
 # 允许的主机列表
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']  # 开发环境允许所有主机，生产环境应该设置具体域名
 
 
 # 应用程序定义
