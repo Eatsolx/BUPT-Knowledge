@@ -30,17 +30,10 @@ def chat_stream(request):
         api_key = getattr(settings, 'DASHSCOPE_API_KEY', '')
         model = getattr(settings, 'DASHSCOPE_MODEL', '')
         
-        # 添加系统提示，指导AI返回Markdown格式
-        system_message = {
-            'role': 'system',
-            'content': '请使用Markdown格式回答用户的问题。支持以下Markdown语法：\n- **粗体** 和 *斜体*\n- # 标题\n- - 列表项\n- `代码` 和 ```代码块```\n- > 引用\n- [链接](URL)\n- 表格\n请确保代码块有适当的语法高亮。'
-        }
-        
         # 准备请求数据
-        messages_with_system = [system_message] + messages
         payload = {
             'model': model,
-            'messages': messages_with_system,
+            'messages': messages,
             'stream': True,
             'stream_options': {'include_usage': True}
         }
