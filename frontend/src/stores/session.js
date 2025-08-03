@@ -81,8 +81,12 @@ export function useSessionStore() {
   // 更新消息
   const updateMessage = (index, message) => {
     if (sessionState.messages[index]) {
-      sessionState.messages[index] = message
-      saveSessionState(sessionState)
+      // 只在内容真正改变时才更新
+      if (sessionState.messages[index].content !== message.content || 
+          sessionState.messages[index].isStreaming !== message.isStreaming) {
+        sessionState.messages[index] = message
+        saveSessionState(sessionState)
+      }
     }
   }
   
@@ -90,6 +94,12 @@ export function useSessionStore() {
   const resetSessionState = () => {
     const newState = resetSession()
     Object.assign(sessionState, newState)
+  }
+  
+  // 重置消息列表
+  const resetMessages = (newMessages) => {
+    sessionState.messages = newMessages
+    saveSessionState(sessionState)
   }
   
   // 检查是否是页面刷新
@@ -105,6 +115,7 @@ export function useSessionStore() {
     addMessage,
     updateMessage,
     resetSessionState,
+    resetMessages,
     isPageRefresh
   }
 }

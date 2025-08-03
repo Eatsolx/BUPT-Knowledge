@@ -183,3 +183,66 @@ def chat_stream(request):
             {"error": f"服务器错误: {str(e)}"}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+@csrf_exempt
+@api_view(['POST'])
+def cancel_chat(request):
+    """
+    取消对话API
+    """
+    try:
+        # 获取请求数据
+        data = request.data
+        conversation_id = data.get('conversation_id')
+        
+        if not conversation_id:
+            return Response(
+                {"error": "conversation_id不能为空"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 从settings获取API配置
+        api_url = getattr(settings, 'COZE_API_URL', 'https://api.coze.cn/v3/chat')
+        api_key = getattr(settings, 'COZE_API_KEY', '')
+        bot_id = getattr(settings, 'COZE_BOT_ID', '')
+        user_id = getattr(settings, 'COZE_USER_ID', '123456789')
+        
+        if not api_key or not bot_id:
+            return Response(
+                {"error": "API配置不完整，请检查环境变量"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        # 构建取消对话的URL
+        cancel_url = f"{api_url}/cancel"
+        
+        # 准备请求数据
+        payload = {
+            'bot_id': bot_id,
+            'user_id': user_id,
+            'conversation_id': conversation_id
+        }
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'Bearer {api_key}'
+        }
+        
+        # 发送取消请求
+        response = requests.post(cancel_url, json=payload, headers=headers)
+        
+        if response.status_code == 200:
+            return Response({"message": "对话已取消"})
+        else:
+            error_text = response.text if response.text else '未知错误'
+            return Response(
+                {"error": f"取消对话失败: {error_text}"}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
+    except Exception as e:
+        print(f"取消对话错误: {str(e)}")
+        return Response(
+            {"error": f"服务器错误: {str(e)}"}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

@@ -7,18 +7,35 @@ const api = axios.create({
 
 export default {
     // 流式聊天API
-    chatStream(messages, conversationId = null) {
+    chatStream(messages, conversationId = null, signal = null) {
         const requestBody = { messages }
         if (conversationId) {
             requestBody.conversation_id = conversationId
         }
         
-        return fetch('/api/chat/stream/', {
+        const options = {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(requestBody),
+        }
+        
+        if (signal) {
+            options.signal = signal
+        }
+        
+        return fetch('/api/chat/stream/', options);
+    },
+    
+    // 取消对话API
+    cancelChat(conversationId) {
+        return fetch('/api/chat/cancel/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ conversation_id: conversationId }),
         });
     }
 }
