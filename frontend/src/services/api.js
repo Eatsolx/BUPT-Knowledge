@@ -7,13 +7,18 @@ const api = axios.create({
 
 export default {
     // 流式聊天API
-    chatStream(messages) {
+    chatStream(messages, conversationId = null) {
+        const requestBody = { messages }
+        if (conversationId) {
+            requestBody.conversation_id = conversationId
+        }
+        
         return fetch('/api/chat/stream/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ messages }),
+            body: JSON.stringify(requestBody),
         });
     }
 }

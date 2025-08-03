@@ -134,6 +134,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = True
 
 # AI API配置
-DASHSCOPE_API_KEY = os.getenv('DASHSCOPE_API_KEY', '')
-DASHSCOPE_API_URL = os.getenv('DASHSCOPE_API_URL', 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions')
-DASHSCOPE_MODEL = os.getenv('DASHSCOPE_MODEL', 'deepseek-r1-distill-qwen-7b')
+COZE_API_KEY = os.getenv('COZE_API_KEY', '')
+COZE_API_URL = os.getenv('COZE_API_URL', 'https://api.coze.cn/v3/chat')
+COZE_BOT_ID = os.getenv('COZE_BOT_ID', '')
+COZE_USER_ID = os.getenv('COZE_USER_ID', '123456789')

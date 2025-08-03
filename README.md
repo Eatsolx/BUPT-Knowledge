@@ -31,10 +31,11 @@ cp .env.example .env
 编辑 `.env` 文件，填入你的实际配置：
 
 ```env
-# AI API配置
-DASHSCOPE_API_KEY=your_actual_api_key_here
-DASHSCOPE_API_URL=https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
-DASHSCOPE_MODEL=deepseek-r1-distill-qwen-7b
+# Coze API配置
+COZE_API_KEY=your_actual_api_key_here
+COZE_API_URL=https://api.coze.cn/v3/chat
+COZE_BOT_ID=your_actual_bot_id_here
+COZE_USER_ID=123456789
 
 # Django配置
 SECRET_KEY=your_actual_secret_key_here

@@ -5,9 +5,9 @@
         <div :class="['chat-bubble', msg.role]">
           <div class="message-header">
             <span v-if="msg.role === 'user'" class="bubble-label">你：</span>
-            <span v-if="msg.role === 'ai'" class="bubble-label">AI：</span>
+            <span v-if="msg.role === 'assistant'" class="bubble-label">AI：</span>
           </div>
-          <div v-if="msg.role === 'ai' && msg.content.includes('思考过程：')" class="ai-content">
+          <div v-if="msg.role === 'assistant' && msg.content.includes('思考过程：')" class="ai-content">
             <div class="reasoning">{{ getReasoning(msg.content) }}</div>
             <div class="answer markdown-body" v-html="renderMarkdown(getAnswer(msg.content))"></div>
           </div>
@@ -40,11 +40,12 @@
 </template>
 
 <script setup>
-import { ref, nextTick, watch, onMounted } from 'vue'
+import { ref, nextTick, watch, onMounted, onActivated } from 'vue'
 import { marked } from 'marked'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github.css'
 import api from '../services/api.js'
+import { useSessionStore } from '../stores/session.js'
 
 // css
 import '../assets/chat-interface.css'
@@ -57,12 +58,29 @@ hljs.configure({
 
 const input = ref('')
 const inputRef = ref(null)
-const messages = ref([])
 const chatHistory = ref(null)
 const copyStatus = ref({})
 
+// 使用会话状态管理
+const sessionStore = useSessionStore()
+const messages = ref(sessionStore.getMessages())
+
+// 如果没有消息，添加欢迎消息
 onMounted(() => {
-  messages.value.push({ role: 'ai', content: '你好，我是北京邮电大学知识库智能体，很高兴为你服务。' })
+  if (messages.value.length === 0) {
+    const welcomeMessage = { role: 'assistant', content: '你好，我是北京邮电大学知识库智能体，很高兴为你服务。' }
+    messages.value.push(welcomeMessage)
+    sessionStore.addMessage(welcomeMessage)
+  }
+})
+
+// 组件激活时重新同步消息状态
+onActivated(() => {
+  // 只在消息数量不一致时才同步
+  const sessionMessages = sessionStore.getMessages()
+  if (messages.value.length !== sessionMessages.length) {
+    messages.value = sessionMessages
+  }
 })
 
 // 配置marked选项
@@ -111,27 +129,31 @@ function getAnswer(content) {
 async function send() {
   if (!input.value.trim()) return
   
-  messages.value.push({ role: 'user', content: input.value })
-  const userMessage = input.value
+  const userMessage = { role: 'user', content: input.value }
+  messages.value.push(userMessage)
+  sessionStore.addMessage(userMessage)
+  
+  const userContent = input.value
   input.value = ''
   autoResize()
 
-  const aiMsg = { role: 'ai', content: '' }
+  const aiMsg = { role: 'assistant', content: '' }
   messages.value.push(aiMsg)
+  sessionStore.addMessage(aiMsg)
   scrollToBottom()
 
   try {
     const response = await api.chatStream([
-      { role: 'user', content: userMessage }
-    ])
+      { role: 'user', content: userContent }
+    ], sessionStore.getConversationId())
 
     if (!response.body) throw new Error('无响应流')
     const reader = response.body.getReader()
     const decoder = new TextDecoder('utf-8')
     let done = false
-    let reasoning = ''
-    let finalAnswer = ''
     let buffer = ''
+    let reasoningContent = ''
+    let answerContent = ''
 
     while (!done) {
       const { value, done: doneReading } = await reader.read()
@@ -145,32 +167,101 @@ async function send() {
         for (const line of lines) {
           if (line.startsWith('data:')) {
             const data = line.replace('data: ', '').replace('data:', '').trim()
-            if (!data || data === '[DONE]') continue
+            if (!data || data === '[DONE]') {
+              // 流式输出结束，设置最终内容
+              if (reasoningContent || answerContent) {
+                aiMsg.content = `思考过程：${reasoningContent}\n最终答案：${answerContent}`
+                const messageIndex = messages.value.length - 1
+                sessionStore.updateMessage(messageIndex, aiMsg)
+                messages.value = [...messages.value]
+                scrollToBottom()
+                applyCodeHighlighting()
+              }
+              continue
+            }
 
             try {
               const json = JSON.parse(data)
-              const delta = json.choices?.[0]?.delta
-              if (delta) {
-                let changed = false
-
-                if (delta.reasoning_content) {
-                  reasoning += delta.reasoning_content
-                  changed = true
-                }
-                if (delta.content) {
-                  finalAnswer += delta.content
-                  changed = true
-                }
-
-                if (changed) {
-                  aiMsg.content = reasoning
-                    ? `思考过程：${reasoning}\n最终答案：${finalAnswer}`
-                    : finalAnswer
+              
+              // 处理Coze API的响应格式
+              if (json.role === 'assistant' && json.type === 'answer') {
+                // 检查是否是完整的数据包（包含完整的推理和答案）
+                if (json.reasoning_content && json.content && 
+                    json.reasoning_content.length > 50 && json.content.length > 20) {
+                  // 这是一个完整的数据包，直接替换内容
+                  aiMsg.content = `思考过程：${json.reasoning_content}\n最终答案：${json.content}`
+                  
+                  const messageIndex = messages.value.length - 1
+                  sessionStore.updateMessage(messageIndex, aiMsg)
                   messages.value = [...messages.value]
                   scrollToBottom()
-                  // 应用代码高亮
+                  applyCodeHighlighting()
+                } else {
+                  // 处理推理过程
+                  if (json.reasoning_content) {
+                    reasoningContent += json.reasoning_content
+                    aiMsg.content = `思考过程：${reasoningContent}\n最终答案：${answerContent}`
+                    
+                    const messageIndex = messages.value.length - 1
+                    sessionStore.updateMessage(messageIndex, aiMsg)
+                    messages.value = [...messages.value]
+                    scrollToBottom()
+                    applyCodeHighlighting()
+                  }
+                  
+                  // 处理最终答案
+                  if (json.content) {
+                    answerContent += json.content
+                    aiMsg.content = `思考过程：${reasoningContent}\n最终答案：${answerContent}`
+                    
+                    const messageIndex = messages.value.length - 1
+                    sessionStore.updateMessage(messageIndex, aiMsg)
+                    messages.value = [...messages.value]
+                    scrollToBottom()
+                    applyCodeHighlighting()
+                  }
+                }
+              } else if (json.role === 'assistant' && json.type === 'knowledge') {
+                // 处理知识库回复
+                if (json.content) {
+                  try {
+                    const contentData = JSON.parse(json.content)
+                    if (contentData.msg_type === 'knowledge_recall') {
+                      const knowledgeData = JSON.parse(contentData.data)
+                      if (knowledgeData.chunks && knowledgeData.chunks.length > 0) {
+                        aiMsg.content = knowledgeData.chunks[0].slice || '已找到相关信息'
+                      }
+                    }
+                  } catch (e) {
+                    aiMsg.content = '已找到相关信息'
+                  }
+                  const messageIndex = messages.value.length - 1
+                  sessionStore.updateMessage(messageIndex, aiMsg)
+                  messages.value = [...messages.value]
+                  scrollToBottom()
                   applyCodeHighlighting()
                 }
+              } else if (json.status === 'in_progress') {
+                // 对话进行中，显示加载状态
+                if (!aiMsg.content) {
+                  aiMsg.content = '正在思考中...'
+                  const messageIndex = messages.value.length - 1
+                  sessionStore.updateMessage(messageIndex, aiMsg)
+                  messages.value = [...messages.value]
+                  scrollToBottom()
+                }
+              } else if (json.status === 'completed') {
+                // 对话完成，只在没有内容时才设置默认消息
+                if (!aiMsg.content || aiMsg.content === '正在思考中...') {
+                  aiMsg.content = '抱歉，我暂时无法回复。请稍后再试。'
+                  const messageIndex = messages.value.length - 1
+                  sessionStore.updateMessage(messageIndex, aiMsg)
+                  messages.value = [...messages.value]
+                  scrollToBottom()
+                  applyCodeHighlighting()
+                }
+              } else if (json.type === 'verbose') {
+                // 处理verbose类型的消息（通常是系统消息）
               }
             } catch (e) {
               console.log('解析失败的行:', line)
@@ -180,7 +271,11 @@ async function send() {
       }
     }
   } catch (err) {
-    aiMsg.content = 'AI接口请求失败，请稍后重试。'
+    console.error('API请求错误:', err)
+    aiMsg.content = `AI接口请求失败：${err.message || '请稍后重试'}`
+    // 更新会话状态中的消息
+    const messageIndex = messages.value.length - 1
+    sessionStore.updateMessage(messageIndex, aiMsg)
     messages.value = [...messages.value]
   }
   scrollToBottom()
