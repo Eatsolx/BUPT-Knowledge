@@ -83,7 +83,10 @@ export function useSessionStore() {
    * 获取当前会话ID
    * @returns {string} 会话ID
    */
-  const getConversationId = () => sessionState.conversationId
+  const getConversationId = () => {
+    console.log('Debug - 获取会话ID:', sessionState.conversationId)
+    return sessionState.conversationId
+  }
   
   /**
    * 获取消息列表
@@ -201,7 +204,92 @@ export function useSessionStore() {
     pendingMessage.value = null
     return message
   }
-  
+
+  /**
+   * 设置会话ID
+   * @param {string} conversationId - 会话ID
+   */
+  function setConversationId(conversationId) {
+    console.log('Debug - 设置会话ID:', conversationId)
+    sessionState.conversationId = conversationId
+    saveSessionState(sessionState)
+  }
+
+  /**
+   * 创建新会话
+   * 调用API创建会话并设置会话ID
+   * @returns {Promise<string>} 会话ID
+   */
+  async function createNewConversation() {
+    try {
+      const response = await api.createConversation()
+      if (response.ok) {
+        const data = await response.json()
+        const conversationId = data.conversation_id
+        if (conversationId) {
+          setConversationId(conversationId)
+          return conversationId
+        } else {
+          throw new Error('未获取到会话ID')
+        }
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '创建会话失败')
+      }
+    } catch (error) {
+      console.error('创建会话失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 清除会话
+   * 调用API清除会话并重置本地状态
+   * @returns {Promise<void>}
+   */
+  async function clearConversation() {
+    try {
+      const conversationId = sessionState.conversationId
+      const response = await api.clearConversation(conversationId)
+      if (response.ok) {
+        // 重置会话状态
+        sessionState.conversationId = null
+        sessionState.messages = []
+        sessionState.createdAt = Date.now()
+        
+        // 添加欢迎消息
+        const welcomeMessage = { 
+          role: 'assistant', 
+          content: '你好，我是北京邮电大学知识库智能体，很高兴为你服务。' 
+        }
+        sessionState.messages.push(welcomeMessage)
+        
+        saveSessionState(sessionState)
+      } else {
+        const errorData = await response.json()
+        throw new Error(errorData.error || '清除会话失败')
+      }
+    } catch (error) {
+      console.error('清除会话失败:', error)
+      throw error
+    }
+  }
+
+  /**
+   * 获取上下文消息（前2条对话，总共4条消息）
+   * @returns {Array} 上下文消息数组
+   */
+  function getContextMessages() {
+    const messages = sessionState.messages
+    if (messages.length <= 4) {
+      // 如果消息数量少于等于4条，返回除最后一条之外的所有消息
+      // 因为最后一条通常是当前正在发送的消息
+      return messages.slice(0, -1)
+    }
+    // 返回最后4条消息作为上下文，但不包括最后一条（当前消息）
+    return messages.slice(-5, -1)
+  }
+
   return {
     conversationId: sessionState.conversationId,
     messages: sessionState.messages,
@@ -214,7 +302,11 @@ export function useSessionStore() {
     resetMessages,
     isPageRefresh,
     setPendingMessage,
-    getAndClearPendingMessage
+    getAndClearPendingMessage,
+    setConversationId,
+    createNewConversation,
+    clearConversation,
+    getContextMessages
   }
 }
 

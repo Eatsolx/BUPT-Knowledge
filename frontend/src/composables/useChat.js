@@ -115,6 +115,7 @@ export function useChat() {
                 // 只有在AI已经开始回答且有内容时，才认为完成事件有效
                 if (aiMsg.content && aiMsg.content.length > 0 && aiMsg.content !== '正在思考中...') {
                   isCompleted = true // 标记已完成，禁止后续内容更新
+                  
                   // 立即清除流式状态
                   clearStreamingState()
                   return
@@ -133,6 +134,10 @@ export function useChat() {
                   const messageIndex = messages.value.length - 1
                   messages.value[messageIndex] = { ...aiMsg, content: finalContent }
                   sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
+                  
+                  // 立即清除流式状态
+                  clearStreamingState()
+                  return
                 }
                 // 立即清除流式状态
                 clearStreamingState()
@@ -171,7 +176,8 @@ export function useChat() {
                           const messageIndex = messages.value.length - 1
                           messages.value[messageIndex] = { ...aiMsg, content: finalContent }
                           sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
-                          // 知识库回复完成，立即结束流式状态
+                          
+                          // 立即清除流式状态
                           clearStreamingState()
                           return
                         }
@@ -183,7 +189,8 @@ export function useChat() {
                       const messageIndex = messages.value.length - 1
                       messages.value[messageIndex] = { ...aiMsg, content: finalContent }
                       sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
-                      // 知识库回复完成，立即结束流式状态
+                      
+                      // 立即清除流式状态
                       clearStreamingState()
                       return
                     }
@@ -202,6 +209,10 @@ export function useChat() {
                     const messageIndex = messages.value.length - 1
                     messages.value[messageIndex] = { ...aiMsg, content: finalContent }
                     sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
+                    
+                    // 立即清除流式状态
+                    clearStreamingState()
+                    return
                   } else if (!aiMsg.content || aiMsg.content === '正在思考中...') {
                     // 只在没有内容时才设置默认消息
                     const finalContent = '抱歉，我暂时无法回复。请稍后再试。'
@@ -209,6 +220,10 @@ export function useChat() {
                     const messageIndex = messages.value.length - 1
                     messages.value[messageIndex] = { ...aiMsg, content: finalContent }
                     sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
+                    
+                    // 立即清除流式状态
+                    clearStreamingState()
+                    return
                   }
                   // 对话完成，立即结束流式状态
                   clearStreamingState()
@@ -240,8 +255,10 @@ export function useChat() {
         aiMsg.content = `AI接口请求失败：${err.message || '请稍后重试'}`
       }
       
-      // 立即清除流式状态
-      clearStreamingState()
+      // 确保流式状态已清除
+      if (aiMsg.isStreaming) {
+        clearStreamingState()
+      }
     }
     
     // 确保流式状态已清除

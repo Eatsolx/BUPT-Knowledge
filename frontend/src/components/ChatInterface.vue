@@ -60,9 +60,6 @@
         rows="1"
         @input="autoResizeHandler"
         @keydown="handleKeydown"
-        @compositionstart="isComposing = true"
-        @compositionend="handleCompositionEnd"
-        @beforeinput="handleBeforeInput"
       ></textarea>
       <!-- 发送按钮 -->
       <button class="chat-button" @click="send" :disabled="isStreaming">发送</button>
@@ -87,9 +84,6 @@ const input = ref('') // 输入框内容
 const inputRef = ref(null) // 输入框DOM引用
 const chatHistory = ref(null) // 聊天历史DOM引用
 const copyStatus = ref({}) // 复制状态管理
-const isComposing = ref(false) // 输入法组合状态
-const compositionTimeout = ref(null) // 输入法完成延迟定时器
-const lastInputTime = ref(0) // 最后输入时间
 
 // 使用会话状态管理
 const sessionStore = useSessionStore()
@@ -237,61 +231,17 @@ async function cancelStreamHandler(message) {
  */
 function autoResizeHandler() {
   autoResize(inputRef)
-  // 记录最后输入时间
-  lastInputTime.value = Date.now()
 }
 
 /**
- * 处理键盘事件，在输入法激活时不发送消息
+ * 处理键盘事件
  */
 function handleKeydown(event) {
-  // 检查输入框是否有选中的文本（输入法候选词）
-  const textarea = event.target;
-  const hasSelection = textarea.selectionStart !== textarea.selectionEnd;
-  
-  // 检查是否在输入法输入后立即按回车（时间差小于200ms）
-  const timeSinceLastInput = Date.now() - lastInputTime.value;
-  const isRecentInput = timeSinceLastInput < 200;
-  
-  // 如果输入法正在组合中、有选中文本或刚输入完，不发送消息
-  if (event.isComposing || hasSelection || isRecentInput) {
-    console.log('输入法状态检测：', {
-      isComposing: event.isComposing,
-      hasSelection,
-      isRecentInput,
-      timeSinceLastInput
-    });
-    return;
-  }
-  
   // 如果按下回车键且没有按Shift键，发送消息
   if (event.key === 'Enter' && !event.shiftKey) {
-    console.log('发送消息');
     event.preventDefault(); // 阻止默认的换行行为
     send();
   }
-}
-
-/**
- * 处理 beforeinput 事件，用于更准确地检测输入法状态
- */
-function handleBeforeInput(event) {
-  // 如果 beforeinput 事件是由输入法触发，则 isComposing 为 true
-  // 否则，由用户直接输入，则 isComposing 为 false
-  isComposing.value = event.inputType === 'insertCompositionText';
-}
-
-/**
- * 处理输入法组合结束事件，添加延迟确保输入法完全完成
- */
-function handleCompositionEnd() {
-  isComposing.value = false;
-  // 延迟100ms确保输入法完全完成
-  compositionTimeout.value = setTimeout(() => {
-    isComposing.value = false;
-    clearTimeout(compositionTimeout.value);
-    compositionTimeout.value = null;
-  }, 100);
 }
 
 // 监听输入框内容变化，自动调整高度
