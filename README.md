@@ -1,11 +1,11 @@
-# Chat AI 项目
+# BUPT AI 项目
 
 这是一个基于Vue.js前端和Django后端的AI聊天应用，提供智能问答功能。
 
 ## 项目结构
 
 ```
-chat-ai/
+bupt-ai/
 ├── frontend/          # Vue.js前端应用
 ├── backend/           # Django后端API
 ├── nginx/             # Nginx反向代理配置
@@ -82,7 +82,7 @@ npm run dev
 
 ## Nginx 配置
 
-1. 复制 nginx/chat-ai.conf 到Nginx配置文件夹
+1. 复制 nginx/bupt-ai.conf 到Nginx配置文件夹
 2. 启动 Nginx服务
 
 网页将在 http://localhost 运行，通过Nginx反向代理访问

@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Chat AI Docker 部署脚本
+# BUPT AI Docker 部署脚本
 
-echo "🚀 开始部署 Chat AI 应用..."
+echo "🚀 开始部署 BUPT AI 应用..."
 
 # 检查Docker是否运行
 if ! docker info > /dev/null 2>&1; then

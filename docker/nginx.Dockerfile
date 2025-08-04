@@ -2,7 +2,7 @@
 FROM nginx:alpine
 
 # 复制nginx配置
-COPY nginx/chat-ai-simple.conf /etc/nginx/conf.d/default.conf
+COPY nginx/bupt-ai-simple.conf /etc/nginx/conf.d/default.conf
 
 # 暴露端口
 EXPOSE 80
