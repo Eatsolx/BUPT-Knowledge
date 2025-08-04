@@ -25,7 +25,8 @@ export default {
     chatStream(messages, conversationId = null, signal = null) {
         const requestBody = { messages }
         if (conversationId) {
-            requestBody.conversation_id = conversationId
+            // 将字符串转换为数字格式
+            requestBody.conversation_id = parseInt(conversationId) || conversationId
         }
         
         const options = {
@@ -56,7 +57,7 @@ export default {
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ conversation_id: conversationId }),
+            body: JSON.stringify({ conversation_id: parseInt(conversationId) || conversationId }),
         });
     }
 }

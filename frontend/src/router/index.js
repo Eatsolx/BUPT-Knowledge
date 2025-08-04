@@ -11,7 +11,10 @@ const routes = [
   {
     path: '/chat',
     name: 'Chat',
-    component: ChatInterface
+    component: ChatInterface,
+    props: (route) => ({ 
+      initialQuestion: route.query.question || null 
+    })
   }
 ]
 

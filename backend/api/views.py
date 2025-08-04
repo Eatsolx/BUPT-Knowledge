@@ -1,11 +1,14 @@
 import json
 import requests
+import logging
 from django.http import StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.conf import settings
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
+
+logger = logging.getLogger(__name__)
 
 @csrf_exempt
 @api_view(['POST'])

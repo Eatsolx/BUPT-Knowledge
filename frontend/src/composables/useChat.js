@@ -1,31 +1,37 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import api from '../services/api.js'
 import { useSessionStore } from '../stores/session.js'
 
 export function useChat() {
   const sessionStore = useSessionStore()
-  const messages = ref(sessionStore.getMessages())
+  // 使用computed保持响应式
+  const messages = computed(() => sessionStore.messages)
   const currentStreamController = ref(null)
   const streamingMessageIndex = ref(-1)
   
   const maxMessages = 50
   
+  // 强制触发响应式更新的辅助函数
+  const triggerReactiveUpdate = () => {
+    // 只通过sessionStore来触发更新，避免computed只读问题
+    const currentMessages = [...sessionStore.messages]
+    sessionStore.messages.length = 0
+    sessionStore.messages.push(...currentMessages)
+  }
+  
   async function sendMessage(userContent) {
     if (messages.value.length >= maxMessages) {
       const recentMessages = messages.value.slice(-20)
-      messages.value = recentMessages
       sessionStore.resetMessages(recentMessages)
     }
     
     const userMessage = { role: 'user', content: userContent }
-    messages.value.push(userMessage)
     sessionStore.addMessage(userMessage)
     
     const aiMsg = { role: 'assistant', content: '', isStreaming: true }
-    messages.value.push(aiMsg)
     sessionStore.addMessage(aiMsg)
     
-    streamingMessageIndex.value = messages.value.length - 1
+    streamingMessageIndex.value = sessionStore.messages.length - 1
     return aiMsg
   }
   
@@ -35,19 +41,30 @@ export function useChat() {
       currentStreamController.value = null
       streamingMessageIndex.value = -1
       const messageIndex = messages.value.length - 1
-      messages.value[messageIndex] = { ...aiMsg, isStreaming: false }
-      sessionStore.updateStreamingStatus(messageIndex, false)
-      messages.value = [...messages.value]
+      sessionStore.updateMessage(messageIndex, { ...aiMsg, isStreaming: false })
+      triggerReactiveUpdate()
     }
 
     try {
       const controller = new AbortController()
       currentStreamController.value = controller
       
-      const response = await api.chatStream([
-        { role: 'user', content: userContent }
-      ], sessionStore.getConversationId(), controller.signal)
+      // 确保发送正确的消息格式
+      const messagesToSend = [{ role: 'user', content: userContent }]
+      
+      console.log('发送到API的数据:', {
+        messages: messagesToSend,
+        conversationId: sessionStore.getConversationId()
+      })
+      
+      const response = await api.chatStream(
+        messagesToSend, 
+        sessionStore.getConversationId(), 
+        controller.signal
+      )
 
+      console.log('API响应状态:', response.status)
+      
       if (!response.body) throw new Error('无响应流')
       
       const reader = response.body.getReader()
@@ -57,10 +74,11 @@ export function useChat() {
       let answerContent = ''
 
       const updateMessageContent = (content) => {
+        console.log('更新消息内容:', content)
         aiMsg.content = content
         const messageIndex = messages.value.length - 1
-        messages.value[messageIndex] = { ...aiMsg }
         sessionStore.updateMessage(messageIndex, aiMsg)
+        triggerReactiveUpdate()
       }
 
       while (true) {
@@ -69,12 +87,15 @@ export function useChat() {
         
         if (value) {
           buffer += decoder.decode(value, { stream: true })
+          console.log('接收到流式数据:', buffer)
           const lines = buffer.split('\n')
           buffer = lines.pop() || ''
 
           for (const line of lines) {
+            console.log('处理行:', line)
             if (line.startsWith('event:')) {
               const eventType = line.replace('event:', '').trim()
+              console.log('事件类型:', eventType)
               if (eventType === 'conversation.message.completed') {
                 if (aiMsg.content && aiMsg.content.length > 0 && aiMsg.content !== '正在思考中...') {
                   clearStreamingState()
@@ -85,13 +106,14 @@ export function useChat() {
             
             if (line.startsWith('data:')) {
               const data = line.replace('data: ', '').replace('data:', '').trim()
+              console.log('数据内容:', data)
               if (!data || data === '[DONE]') {
                 if (reasoningContent || answerContent) {
                   const finalContent = `思考过程：${reasoningContent}\n最终答案：${answerContent}`
                   aiMsg.content = finalContent
                   const messageIndex = messages.value.length - 1
-                  messages.value[messageIndex] = { ...aiMsg, content: finalContent }
                   sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
+                  triggerReactiveUpdate()
                 }
                 clearStreamingState()
                 return
@@ -99,6 +121,7 @@ export function useChat() {
 
               try {
                 const json = JSON.parse(data)
+                console.log('解析的JSON:', json)
                 
                 if (json.role === 'assistant' && json.type === 'answer') {
                   if (json.reasoning_content) {
@@ -122,8 +145,8 @@ export function useChat() {
                           const finalContent = knowledgeData.chunks[0].slice || '已找到相关信息'
                           aiMsg.content = finalContent
                           const messageIndex = messages.value.length - 1
-                          messages.value[messageIndex] = { ...aiMsg, content: finalContent }
                           sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
+                          triggerReactiveUpdate()
                           clearStreamingState()
                           return
                         }
@@ -132,8 +155,8 @@ export function useChat() {
                       const finalContent = '已找到相关信息'
                       aiMsg.content = finalContent
                       const messageIndex = messages.value.length - 1
-                      messages.value[messageIndex] = { ...aiMsg, content: finalContent }
                       sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
+                      triggerReactiveUpdate()
                       clearStreamingState()
                       return
                     }
@@ -147,33 +170,35 @@ export function useChat() {
                     const finalContent = `思考过程：${reasoningContent}\n最终答案：${answerContent}`
                     aiMsg.content = finalContent
                     const messageIndex = messages.value.length - 1
-                    messages.value[messageIndex] = { ...aiMsg, content: finalContent }
                     sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
+                    triggerReactiveUpdate()
                   } else if (!aiMsg.content || aiMsg.content === '正在思考中...') {
                     const finalContent = '抱歉，我暂时无法回复。请稍后再试。'
                     aiMsg.content = finalContent
                     const messageIndex = messages.value.length - 1
-                    messages.value[messageIndex] = { ...aiMsg, content: finalContent }
                     sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
+                    triggerReactiveUpdate()
                   }
                   clearStreamingState()
                   return
                 }
               } catch (e) {
-                // 静默处理解析错误
+                console.log('JSON解析错误:', e)
               }
             }
           }
         }
       }
     } catch (err) {
-      console.error('API请求错误:', err)
-      
+      // 检查是否是取消操作导致的错误
       if (err.name === 'AbortError' || err.message.includes('aborted')) {
         if (!aiMsg.content || aiMsg.content === '正在思考中...') {
           aiMsg.content = '输出已中断'
         }
+        // AbortError是正常的取消操作，不需要显示为错误
+        console.log('流式请求已取消')
       } else {
+        console.error('API请求错误:', err)
         aiMsg.content = `AI接口请求失败：${err.message || '请稍后重试'}`
       }
       
@@ -208,9 +233,8 @@ export function useChat() {
       
       const messageIndex = messages.value.findIndex(msg => msg === message)
       if (messageIndex !== -1) {
-        messages.value[messageIndex] = { ...message, isStreaming: false }
-        sessionStore.updateStreamingStatus(messageIndex, false)
-        messages.value = [...messages.value]
+        sessionStore.updateMessage(messageIndex, { ...message, isStreaming: false })
+        triggerReactiveUpdate()
       }
     } catch (err) {
       console.error('取消对话失败:', err)
@@ -222,9 +246,8 @@ export function useChat() {
       
       const messageIndex = messages.value.findIndex(msg => msg === message)
       if (messageIndex !== -1) {
-        messages.value[messageIndex] = { ...message, isStreaming: false }
-        sessionStore.updateStreamingStatus(messageIndex, false)
-        messages.value = [...messages.value]
+        sessionStore.updateMessage(messageIndex, { ...message, isStreaming: false })
+        triggerReactiveUpdate()
       }
     }
   }
@@ -237,4 +260,4 @@ export function useChat() {
     handleStreamResponse,
     cancelStream
   }
-} 
+}

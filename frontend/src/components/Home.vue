@@ -72,9 +72,10 @@ const showExamples = () => {
 }
 
 const askQuestion = (question) => {
-  const sessionStore = useSessionStore()
-  sessionStore.setPendingMessage(question)
-  router.push('/chat')
+  router.push({
+    path: '/chat',
+    query: { question: question }
+  })
 }
 </script>
 
