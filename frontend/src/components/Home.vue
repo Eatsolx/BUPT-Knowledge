@@ -34,11 +34,11 @@
             <div class="example-question" @click="askQuestion('北邮有哪些热门专业？')">
               "北邮有哪些热门专业？"
             </div>
-            <div class="example-question" @click="askQuestion('学校有奖学金吗？')">
-              "学校有奖学金吗？"
+            <div class="example-question" @click="askQuestion('学校各部门的联系方式是什么？')">
+              "学校各部门的联系方式是什么？"
             </div>
             <div class="example-question" @click="askQuestion('学校有哪几个食堂？')">
-              "学校有哪几个食堂？"
+              "学校有哪几个食堂？" 
             </div>
             <div class="example-question" @click="askQuestion('如何查询成绩？')">
               "如何查询成绩？"

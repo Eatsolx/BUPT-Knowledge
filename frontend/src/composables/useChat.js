@@ -252,12 +252,47 @@ export function useChat() {
     }
   }
   
+  // 处理初始问题的函数
+  async function processInitialQuestion(question, context) {
+    const {
+      nextTick,
+      isStreaming,
+      input,
+      send,
+      scrollToBottom,
+      chatHistory,
+      router
+    } = context
+
+    await nextTick()
+    
+    // 确保没有正在进行的流式请求，并重置所有消息的流式状态
+    if (!isStreaming.value) {
+      // 重置所有消息的isStreaming状态
+      messages.value.forEach((msg, index) => {
+        if (msg.isStreaming) {
+          sessionStore.updateMessage(index, { ...msg, isStreaming: false })
+        }
+      })
+      
+      input.value = question
+      await send()
+      input.value = ''
+      await nextTick()
+      scrollToBottom(chatHistory)
+      
+      // 清除URL中的question参数，避免刷新时重复提问
+      router.replace({ path: '/chat', query: {} })
+    }
+  }
+
   return {
     messages,
     currentStreamController,
     streamingMessageIndex,
     sendMessage,
     handleStreamResponse,
-    cancelStream
+    cancelStream,
+    processInitialQuestion
   }
 }
