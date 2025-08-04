@@ -1,28 +1,8 @@
-"""
-URL configuration for config project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/4.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
 from django.contrib import admin
 from django.urls import path
 from api.views import chat_stream, cancel_chat
 
-# URL路由配置
-# 定义API端点的URL映射
 urlpatterns = [
-    # 流式聊天API端点
     path('api/chat/stream/', chat_stream, name='chat-stream'),
-    # 取消对话API端点
     path('api/chat/cancel/', cancel_chat, name='chat-cancel'),
 ]
