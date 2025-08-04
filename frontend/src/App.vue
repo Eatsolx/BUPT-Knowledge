@@ -34,8 +34,8 @@ const navigateTo = (path) => {
     <!-- 路由视图容器 -->
     <main class="main-content">
       <router-view v-slot="{ Component }">
-        <!-- 使用keep-alive保持组件状态 -->
-        <keep-alive>
+        <!-- 使用keep-alive保持组件状态，但排除首页组件 -->
+        <keep-alive :include="['ChatInterface']">
           <component :is="Component" />
         </keep-alive>
       </router-view>
@@ -125,6 +125,8 @@ body {
 .main-content {
   padding: 0;
   margin: 0;
-  height: calc(100vh - 80px); /* 减去导航栏高度 */
+  min-height: calc(100vh - 80px); /* 使用min-height而不是height */
+  display: flex;
+  flex-direction: column;
 }
 </style>

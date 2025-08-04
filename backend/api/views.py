@@ -119,6 +119,9 @@ def chat_stream(request):
                                 if event_type == 'done':
                                     yield "data: [DONE]\n\n"
                                     return
+                                elif event_type == 'conversation.message.completed':
+                                    # 转发完成事件给前端
+                                    yield f"{line}\n\n"
                                     
                             elif line.startswith('data:'):
                                 # 处理数据内容

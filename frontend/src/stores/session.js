@@ -71,6 +71,9 @@ function resetSession() {
 // 创建响应式状态
 const sessionState = reactive(getSessionState())
 
+// 添加待发送消息的状态
+const pendingMessage = ref(null)
+
 /**
  * 会话状态管理函数
  * 提供会话ID、消息列表的管理功能
@@ -138,6 +141,8 @@ export function useSessionStore() {
       sessionState.messages[index].isStreaming = isStreaming
       // 立即保存，确保UI响应
       saveSessionState(sessionState)
+      // 强制触发响应式更新
+      sessionState.messages = [...sessionState.messages]
     }
   }
   
@@ -176,7 +181,25 @@ export function useSessionStore() {
     saveDebounceTimer = setTimeout(() => {
       saveSessionState(sessionState)
       saveDebounceTimer = null
-    }, 300) // 300ms防抖延迟
+    }, 100) // 减少到100ms防抖延迟，提高响应速度
+  }
+  
+  /**
+   * 设置待发送的消息
+   * @param {string} message - 待发送的消息内容
+   */
+  const setPendingMessage = (message) => {
+    pendingMessage.value = message
+  }
+  
+  /**
+   * 获取并清除待发送的消息
+   * @returns {string|null} 待发送的消息内容
+   */
+  const getAndClearPendingMessage = () => {
+    const message = pendingMessage.value
+    pendingMessage.value = null
+    return message
   }
   
   return {
@@ -189,7 +212,9 @@ export function useSessionStore() {
     updateStreamingStatus,
     resetSessionState,
     resetMessages,
-    isPageRefresh
+    isPageRefresh,
+    setPendingMessage,
+    getAndClearPendingMessage
   }
 }
 

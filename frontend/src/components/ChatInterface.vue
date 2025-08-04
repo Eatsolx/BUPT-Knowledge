@@ -34,9 +34,9 @@
             >
               {{ copyStatus[idx] === '已复制' ? '已复制' : '复制' }}
             </button>
-            <!-- 中断按钮：仅在AI消息流式输出时显示 -->
+            <!-- 中断按钮：在AI消息流式输出时显示，不自动隐藏 -->
             <button 
-              v-if="msg.role === 'assistant' && streamingMessageIndex === idx" 
+              v-if="msg.role === 'assistant' && (streamingMessageIndex === idx || msg.isStreaming)" 
               class="cancel-button" 
               @click="cancelStreamHandler(msg)"
               title="中断输出"
@@ -55,28 +55,29 @@
         class="chat-input"
         ref="inputRef"
         v-model="input"
-        placeholder="请输入您的问题..."
+        :placeholder="isStreaming ? 'AI正在输出中，请稍候...' : '请输入您的问题...'"
+        :disabled="isStreaming"
         rows="1"
         @input="autoResizeHandler"
         @keydown.enter.exact.prevent="send"
       ></textarea>
       <!-- 发送按钮 -->
-      <button class="chat-button" @click="send">发送</button>
+      <button class="chat-button" @click="send" :disabled="isStreaming">发送</button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onActivated, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onActivated, onUnmounted, computed } from 'vue'
 import { useSessionStore } from '../stores/session.js'
 import { useChat } from '../composables/useChat.js'
 import { renderMarkdown, getReasoning, getAnswer, applyCodeHighlighting } from '../utils/markdown.js'
 import { scrollToBottom, autoResize, copyMessage } from '../utils/ui.js'
 
-// 异步加载CSS资源，减少页面初始加载时的内存占用
-import('../assets/chat-interface.css')
-import('highlight.js/styles/github.css')
-import('github-markdown-css/github-markdown.css')
+// 同步加载CSS资源
+import '../assets/chat-interface.css'
+import 'highlight.js/styles/github.css'
+import 'github-markdown-css/github-markdown.css'
 
 // 响应式数据定义
 const input = ref('') // 输入框内容
@@ -90,16 +91,32 @@ const sessionStore = useSessionStore()
 // 使用聊天逻辑组合式函数
 const { messages, currentStreamController, streamingMessageIndex, sendMessage, handleStreamResponse, cancelStream } = useChat()
 
+// 计算是否正在流式输出
+const isStreaming = computed(() => {
+  return streamingMessageIndex.value !== -1 || messages.value.some(msg => msg.isStreaming)
+})
+
 // 内存监控定时器
 let memoryCheckInterval = null
 
 // 组件挂载时的初始化逻辑
-onMounted(() => {
+onMounted(async () => {
+  // 检查是否有待发送的消息
+  const pendingMessage = sessionStore.getAndClearPendingMessage()
+  
   // 如果没有消息，添加欢迎消息
   if (messages.value.length === 0) {
     const welcomeMessage = { role: 'assistant', content: '你好，我是北京邮电大学知识库智能体，很高兴为你服务。' }
     messages.value.push(welcomeMessage)
     sessionStore.addMessage(welcomeMessage)
+  }
+  
+  // 如果有待发送的消息，自动发送
+  if (pendingMessage) {
+    // 设置输入框内容
+    input.value = pendingMessage
+    // 自动发送消息
+    await send()
   }
   
   // 优化内存监控：使用更智能的清理策略
@@ -133,11 +150,20 @@ onMounted(() => {
 })
 
 // 组件激活时重新同步消息状态
-onActivated(() => {
+onActivated(async () => {
   // 只在消息数量不一致时才同步，避免不必要的更新
   const sessionMessages = sessionStore.getMessages()
   if (messages.value.length !== sessionMessages.length) {
     messages.value = sessionMessages
+  }
+  
+  // 检查是否有待发送的消息
+  const pendingMessage = sessionStore.getAndClearPendingMessage()
+  if (pendingMessage && !isStreaming.value) {
+    // 设置输入框内容
+    input.value = pendingMessage
+    // 自动发送消息
+    await send()
   }
 })
 
@@ -167,6 +193,9 @@ onUnmounted(() => {
 async function send() {
   // 验证输入内容不为空
   if (!input.value.trim()) return
+  
+  // 如果正在流式输出，阻止发送
+  if (isStreaming.value) return
   
   const userContent = input.value
   input.value = ''

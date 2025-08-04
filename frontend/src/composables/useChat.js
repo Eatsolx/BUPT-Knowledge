@@ -50,6 +50,19 @@ export function useChat() {
    * @param {string} userContent - 用户输入内容
    */
   async function handleStreamResponse(aiMsg, userContent) {
+    // 立即清除流式状态的函数
+    const clearStreamingState = () => {
+      aiMsg.isStreaming = false
+      currentStreamController.value = null
+      streamingMessageIndex.value = -1
+      const messageIndex = messages.value.length - 1
+      // 立即更新状态
+      messages.value[messageIndex] = { ...aiMsg, isStreaming: false }
+      sessionStore.updateStreamingStatus(messageIndex, false)
+      // 强制触发响应式更新
+      messages.value = [...messages.value]
+    }
+
     try {
       // 创建AbortController用于取消请求
       const controller = new AbortController()
@@ -70,12 +83,17 @@ export function useChat() {
       let reasoningContent = ''
       let answerContent = ''
 
-      // 简化更新函数，直接更新内容
+      // 流式输出过程中实时显示内容，但避免重复
+      let isCompleted = false // 标记是否已完成
+      
       const updateMessageContent = (content) => {
+        if (isCompleted) return // 如果已完成，不再更新内容
         aiMsg.content = content
         const messageIndex = messages.value.length - 1
-        sessionStore.updateMessage(messageIndex, aiMsg)
+        // 立即更新本地状态
         messages.value[messageIndex] = { ...aiMsg }
+        // 立即更新会话状态
+        sessionStore.updateMessage(messageIndex, aiMsg)
       }
 
       // 处理流式数据
@@ -90,6 +108,20 @@ export function useChat() {
 
           // 处理每一行数据
           for (const line of lines) {
+            // 检查是否是事件行
+            if (line.startsWith('event:')) {
+              const eventType = line.replace('event:', '').trim()
+              if (eventType === 'conversation.message.completed') {
+                // 只有在AI已经开始回答且有内容时，才认为完成事件有效
+                if (aiMsg.content && aiMsg.content.length > 0 && aiMsg.content !== '正在思考中...') {
+                  isCompleted = true // 标记已完成，禁止后续内容更新
+                  // 立即清除流式状态
+                  clearStreamingState()
+                  return
+                }
+              }
+            }
+            
             if (line.startsWith('data:')) {
               const data = line.replace('data: ', '').replace('data:', '').trim()
               if (!data || data === '[DONE]') {
@@ -97,52 +129,33 @@ export function useChat() {
                 if (reasoningContent || answerContent) {
                   const finalContent = `思考过程：${reasoningContent}\n最终答案：${answerContent}`
                   aiMsg.content = finalContent
+                  // 立即更新消息内容，覆盖之前的内容
+                  const messageIndex = messages.value.length - 1
+                  messages.value[messageIndex] = { ...aiMsg, content: finalContent }
+                  sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
                 }
-                // 标记流式输出结束并立即更新状态
-                aiMsg.isStreaming = false
-                currentStreamController.value = null
-                // 清除流式消息索引
-                streamingMessageIndex.value = -1
-                // 立即更新状态，确保UI响应
-                const messageIndex = messages.value.length - 1
-                // 强制触发Vue响应式更新 - 使用数组方法触发响应式
-                messages.value.splice(messageIndex, 1, { ...aiMsg, isStreaming: false })
-                // 立即更新流式状态，避免防抖延迟
-                sessionStore.updateStreamingStatus(messageIndex, false)
-                // 强制触发Vue响应式更新
-                messages.value = [...messages.value]
-                // 使用nextTick确保UI立即更新
-                nextTick(() => {
-                  // 确保状态已同步
-                })
-                continue
+                // 立即清除流式状态
+                clearStreamingState()
+                return
               }
 
               try {
                 const json = JSON.parse(data)
                 
                 // 处理Coze API的响应格式
-                if (json.role === 'assistant' && json.type === 'answer') {
-                  // 检查是否是完整的数据包（包含完整的推理和答案）
-                  if (json.reasoning_content && json.content && 
-                      json.reasoning_content.length > 50 && json.content.length > 20) {
-                    // 完整数据包，直接替换内容
-                    const completeContent = `思考过程：${json.reasoning_content}\n最终答案：${json.content}`
-                    updateMessageContent(completeContent)
-                  } else {
-                    // 处理推理过程
-                    if (json.reasoning_content) {
-                      reasoningContent += json.reasoning_content
-                      const partialContent = `思考过程：${reasoningContent}\n最终答案：${answerContent}`
-                      updateMessageContent(partialContent)
-                    }
+                if (json.role === 'assistant' && json.type === 'answer' && !isCompleted) {
+                  // 处理推理过程
+                  if (json.reasoning_content) {
+                    reasoningContent += json.reasoning_content
+                    const partialContent = `思考过程：${reasoningContent}\n最终答案：${answerContent}`
+                    updateMessageContent(partialContent)
+                  }
                     
-                    // 处理最终答案
-                    if (json.content) {
-                      answerContent += json.content
-                      const partialContent = `思考过程：${reasoningContent}\n最终答案：${answerContent}`
-                      updateMessageContent(partialContent)
-                    }
+                  // 处理最终答案
+                  if (json.content) {
+                    answerContent += json.content
+                    const partialContent = `思考过程：${reasoningContent}\n最终答案：${answerContent}`
+                    updateMessageContent(partialContent)
                   }
                 } else if (json.role === 'assistant' && json.type === 'knowledge') {
                   // 处理知识库回复
@@ -152,23 +165,54 @@ export function useChat() {
                       if (contentData.msg_type === 'knowledge_recall') {
                         const knowledgeData = JSON.parse(contentData.data)
                         if (knowledgeData.chunks && knowledgeData.chunks.length > 0) {
-                          updateMessageContent(knowledgeData.chunks[0].slice || '已找到相关信息')
+                          const finalContent = knowledgeData.chunks[0].slice || '已找到相关信息'
+                          aiMsg.content = finalContent
+                          // 立即更新消息内容，覆盖之前的内容
+                          const messageIndex = messages.value.length - 1
+                          messages.value[messageIndex] = { ...aiMsg, content: finalContent }
+                          sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
+                          // 知识库回复完成，立即结束流式状态
+                          clearStreamingState()
+                          return
                         }
                       }
                     } catch (e) {
-                      updateMessageContent('已找到相关信息')
+                      const finalContent = '已找到相关信息'
+                      aiMsg.content = finalContent
+                      // 立即更新消息内容，覆盖之前的内容
+                      const messageIndex = messages.value.length - 1
+                      messages.value[messageIndex] = { ...aiMsg, content: finalContent }
+                      sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
+                      // 知识库回复完成，立即结束流式状态
+                      clearStreamingState()
+                      return
                     }
                   }
-                } else if (json.status === 'in_progress') {
+                } else if (json.status === 'in_progress' && !isCompleted) {
                   // 对话进行中，显示加载状态
                   if (!aiMsg.content) {
                     updateMessageContent('正在思考中...')
                   }
-                } else if (json.status === 'completed') {
-                  // 对话完成，只在没有内容时才设置默认消息
-                  if (!aiMsg.content || aiMsg.content === '正在思考中...') {
-                    updateMessageContent('抱歉，我暂时无法回复。请稍后再试。')
+                } else if (json.status === 'completed' && !isCompleted) {
+                  // 对话完成，设置最终内容
+                  if (reasoningContent || answerContent) {
+                    const finalContent = `思考过程：${reasoningContent}\n最终答案：${answerContent}`
+                    aiMsg.content = finalContent
+                    // 立即更新消息内容，覆盖之前的内容
+                    const messageIndex = messages.value.length - 1
+                    messages.value[messageIndex] = { ...aiMsg, content: finalContent }
+                    sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
+                  } else if (!aiMsg.content || aiMsg.content === '正在思考中...') {
+                    // 只在没有内容时才设置默认消息
+                    const finalContent = '抱歉，我暂时无法回复。请稍后再试。'
+                    aiMsg.content = finalContent
+                    const messageIndex = messages.value.length - 1
+                    messages.value[messageIndex] = { ...aiMsg, content: finalContent }
+                    sessionStore.updateMessage(messageIndex, { ...aiMsg, content: finalContent })
                   }
+                  // 对话完成，立即结束流式状态
+                  clearStreamingState()
+                  return
                 } else if (json.type === 'verbose') {
                   // 处理verbose类型的消息（通常是系统消息）
                 }
@@ -196,33 +240,14 @@ export function useChat() {
         aiMsg.content = `AI接口请求失败：${err.message || '请稍后重试'}`
       }
       
-      // 更新会话状态中的消息
-      const messageIndex = messages.value.length - 1
-      // 强制触发Vue响应式更新 - 使用数组方法触发响应式
-      messages.value.splice(messageIndex, 1, { ...aiMsg, isStreaming: false })
-      // 立即更新流式状态，避免防抖延迟
-      sessionStore.updateStreamingStatus(messageIndex, false)
-      // 强制触发Vue响应式更新
-      messages.value = [...messages.value]
+      // 立即清除流式状态
+      clearStreamingState()
     }
     
-    // 标记流式输出结束
-    aiMsg.isStreaming = false
-    currentStreamController.value = null
-    // 清除流式消息索引
-    streamingMessageIndex.value = -1
-    // 确保状态同步到会话存储
-    const messageIndex = messages.value.length - 1
-    // 强制触发Vue响应式更新 - 使用数组方法触发响应式
-    messages.value.splice(messageIndex, 1, { ...aiMsg, isStreaming: false })
-    // 立即更新流式状态，避免防抖延迟
-    sessionStore.updateStreamingStatus(messageIndex, false)
-    // 强制触发Vue响应式更新
-    messages.value = [...messages.value]
-    // 使用nextTick确保UI立即更新
-    nextTick(() => {
-      // 确保状态已同步
-    })
+    // 确保流式状态已清除
+    if (aiMsg.isStreaming) {
+      clearStreamingState()
+    }
   }
   
   /**
@@ -243,35 +268,28 @@ export function useChat() {
         await api.cancelChat(conversationId)
       }
       
-      // 更新消息状态
-      message.isStreaming = false
-      // 清除流式消息索引
-      streamingMessageIndex.value = -1
-      
       // 只有在没有内容或只有加载提示时才设置中断消息
       if (!message.content || message.content === '正在思考中...') {
         message.content = '输出已中断'
       }
       
+      // 立即清除流式状态
+      message.isStreaming = false
+      streamingMessageIndex.value = -1
+      
       // 更新会话状态
       const messageIndex = messages.value.findIndex(msg => msg === message)
       if (messageIndex !== -1) {
-        // 强制触发Vue响应式更新 - 使用数组方法触发响应式
-        messages.value.splice(messageIndex, 1, { ...message, isStreaming: false })
-        // 立即更新流式状态，避免防抖延迟
+        // 立即更新状态
+        messages.value[messageIndex] = { ...message, isStreaming: false }
         sessionStore.updateStreamingStatus(messageIndex, false)
-        // 强制触发Vue响应式更新
+        // 强制触发响应式更新
         messages.value = [...messages.value]
-        // 使用nextTick确保UI立即更新
-        nextTick(() => {
-          // 确保状态已同步
-        })
       }
     } catch (err) {
       console.error('取消对话失败:', err)
       // 即使取消API调用失败，也要确保前端状态正确
       message.isStreaming = false
-      // 清除流式消息索引
       streamingMessageIndex.value = -1
       if (!message.content || message.content === '正在思考中...') {
         message.content = '输出已中断'
@@ -279,16 +297,11 @@ export function useChat() {
       
       const messageIndex = messages.value.findIndex(msg => msg === message)
       if (messageIndex !== -1) {
-        // 强制触发Vue响应式更新 - 使用数组方法触发响应式
-        messages.value.splice(messageIndex, 1, { ...message, isStreaming: false })
-        // 立即更新流式状态，避免防抖延迟
+        // 立即更新状态
+        messages.value[messageIndex] = { ...message, isStreaming: false }
         sessionStore.updateStreamingStatus(messageIndex, false)
-        // 强制触发Vue响应式更新
+        // 强制触发响应式更新
         messages.value = [...messages.value]
-        // 使用nextTick确保UI立即更新
-        nextTick(() => {
-          // 确保状态已同步
-        })
       }
     }
   }
