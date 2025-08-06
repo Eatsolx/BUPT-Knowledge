@@ -94,7 +94,6 @@ onMounted(async () => {
 })
 
 
-
 async function send() {
   if (!input.value.trim() || isStreaming.value) {
     return
